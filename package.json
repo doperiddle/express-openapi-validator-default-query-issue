@@ -9,6 +9,6 @@
     "express-openapi-validator": "^3.12.7",
     "fs-jetpack": "^2.3.0",
     "swagger-ui-express": "^4.1.4",
-    "yaml": "^1.9.2"
+    "yaml": "^2.8.2"
   }
 }
