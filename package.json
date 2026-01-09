@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
-    "body-parser": "^1.19.0",
+    "body-parser": "^2.2.1",
     "express": "^4.17.1",
     "express-openapi-validator": "^3.12.7",
     "fs-jetpack": "^2.3.0",
