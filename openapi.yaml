@@ -1,10 +1,6 @@
 components:
   schemas:
     PageSort:
-      allOf:
-        - $ref: "#/components/schemas/Paging"
-        - $ref: "#/components/schemas/Sorting"
-    Paging:
       properties:
         page:
           default: 1
@@ -13,9 +9,6 @@ components:
         perPage:
           default: 25
           type: integer
-      type: object
-    Sorting:
-      properties:
         field:
           default: id
           enum:
