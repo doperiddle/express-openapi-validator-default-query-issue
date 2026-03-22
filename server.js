@@ -11,6 +11,13 @@ const app = express();
 
 app.use(bodyParser.json());
 
+app.use(
+  OpenApiValidator.middleware({
+    apiSpec,
+    validateResponses: { removeAdditional: "failing" },
+  })
+);
+
 function handleDeepObjectQuery(req, res) {
   console.log(req.query);
   res.sendStatus(200);
@@ -23,47 +30,13 @@ function errorHandler(error, req, res, next) {
   });
 }
 
- copilot/fix-security-issues
-server.use(
-  OpenApiValidator.middleware({
-    apiSpec,
-    validateResponses: { removeAdditional: "failing" },
-  })
-);
+app.use("/spec", (req, res) => res.send(apiSpec));
+app.use("/docs", swagger.serve, swagger.setup(apiSpec));
+app.get("/deep_object", handleDeepObjectQuery);
 
-server.use("/spec", (req, res) => res.send(apiSpec));
-server.use("/docs", swagger.serve, swagger.setup(apiSpec));
-server.get("/deep_object", (req, res) => {
-  console.log(req.query);
-  res.sendStatus(200);
-});
+app.use(errorHandler);
 
-server.use((err, req, res, next) =>
-  res.status(err.status || 500).json({
-    message: err.message,
-    errors: err.errors,
-  })
-);
-
-server.listen(1234, (err) => {
-  if (err) throw err;
+app.listen(1234, (startupError) => {
+  if (startupError) throw startupError;
   console.log("Running on Port 1234");
 });
-new OpenApiValidator({
-  apiSpec,
-  validateResponses: { removeAdditional: "failing" },
-})
-  .install(app)
-  .then(() => {
-    app.use("/spec", (req, res) => res.send(apiSpec));
-    app.use("/docs", swagger.serve, swagger.setup(apiSpec));
-    app.get("/deep_object", handleDeepObjectQuery);
-
-    app.use(errorHandler);
-
-    app.listen(1234, (startupError) => {
-      if (startupError) throw startupError;
-      console.log("Running on Port 1234");
-    });
-  });
- master
