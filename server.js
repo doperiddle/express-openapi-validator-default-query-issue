@@ -24,7 +24,7 @@ app.use(
 );
 
 function handleDeepObjectQuery(req, res) {
-  console.log("deep_object query: %j", req.query);
+  console.log("deep_object query:", JSON.stringify(req.query));
   res.status(200).json([]);
 }
 
