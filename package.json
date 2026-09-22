@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
+  "scripts": {
+    "start": "node server.js",
+    "test": "jest"
+  },
   "dependencies": {
     "body-parser": "^2.2.1",
     "express": "^4.22.0",
@@ -10,5 +14,9 @@
     "fs-jetpack": "^2.3.0",
     "swagger-ui-express": "^5.0.1",
     "yaml": "^1.9.2"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2"
   }
 }
