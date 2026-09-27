@@ -39,24 +39,56 @@ function resolveRef(spec, schema) {
 
 function createDeepObjectDefaultsMiddleware(spec) {
   const deepObjectParams = [];
-  for (const pathItem of Object.values(spec.paths || {})) {
-    for (const operation of Object.values(pathItem)) {
-      if (!operation || !Array.isArray(operation.parameters)) continue;
-      for (const param of operation.parameters) {
-        if (param.in !== "query" || param.style !== "deepObject") continue;
-        const schema = resolveRef(spec, param.schema);
-        if (!schema || !schema.properties) continue;
-        const propertyDefaults = {};
-        for (const [key, propSchema] of Object.entries(schema.properties)) {
-          const resolved = resolveRef(spec, propSchema);
-          if (resolved && resolved.default !== undefined) {
-            propertyDefaults[key] = resolved.default;
-          }
-        }
-        if (Object.keys(propertyDefaults).length > 0) {
-          deepObjectParams.push({ name: param.name, defaults: propertyDefaults });
+  const operationKeys = [
+    "get",
+    "put",
+    "post",
+    "delete",
+    "options",
+    "head",
+    "patch",
+    "trace",
+  ];
+  const collectDefaultsFromSchema = (schema) => {
+    const resolvedSchema = resolveRef(spec, schema);
+    if (!resolvedSchema) return {};
+
+    const propertyDefaults = {};
+    for (const composition of ["allOf", "anyOf", "oneOf"]) {
+      const schemas = resolvedSchema[composition];
+      if (!Array.isArray(schemas)) continue;
+      for (const subSchema of schemas) {
+        Object.assign(propertyDefaults, collectDefaultsFromSchema(subSchema));
+      }
+    }
+
+    if (resolvedSchema.properties) {
+      for (const [key, propSchema] of Object.entries(resolvedSchema.properties)) {
+        const resolved = resolveRef(spec, propSchema);
+        if (resolved && resolved.default !== undefined) {
+          propertyDefaults[key] = resolved.default;
         }
       }
+    }
+
+    return propertyDefaults;
+  };
+
+  const addDeepObjectParams = (parameters) => {
+    if (!Array.isArray(parameters)) return;
+    for (const param of parameters) {
+      if (param.in !== "query" || param.style !== "deepObject") continue;
+      const propertyDefaults = collectDefaultsFromSchema(param.schema);
+      if (Object.keys(propertyDefaults).length > 0) {
+        deepObjectParams.push({ name: param.name, defaults: propertyDefaults });
+      }
+    }
+  };
+
+  for (const pathItem of Object.values(spec.paths || {})) {
+    addDeepObjectParams(pathItem && pathItem.parameters);
+    for (const key of operationKeys) {
+      addDeepObjectParams(pathItem && pathItem[key] && pathItem[key].parameters);
     }
   }
   return function deepObjectDefaultsMiddleware(req, _res, next) {
@@ -74,13 +106,13 @@ function createDeepObjectDefaultsMiddleware(spec) {
  *    can return arbitrary JSON without conflicting with the spec's array schema),
  *  - echoes req.query.pagesort as JSON so tests can assert on it.
  */
-function buildTestApp() {
+function buildTestApp(spec = apiSpec) {
   const testApp = express();
   testApp.use(bodyParser.json());
-  testApp.use(createDeepObjectDefaultsMiddleware(apiSpec));
+  testApp.use(createDeepObjectDefaultsMiddleware(spec));
   testApp.use(
     OpenApiValidator.middleware({
-      apiSpec,
+      apiSpec: spec,
       validateRequests: true,
       validateResponses: false,
     })
@@ -126,6 +158,57 @@ describe("GET /deep_object – deepObject defaults", () => {
       perPage: 25,
       field: "id",
       order: "ASC",
+    });
+  });
+
+  test("path-level deepObject parameter: defaults are applied", async () => {
+    const pathLevelSpec = JSON.parse(JSON.stringify(apiSpec));
+    const deepObjectPath = pathLevelSpec.paths["/deep_object"];
+    deepObjectPath.parameters = deepObjectPath.get.parameters;
+    delete deepObjectPath.get.parameters;
+
+    const pathLevelApp = buildTestApp(pathLevelSpec);
+    const res = await request(pathLevelApp)
+      .get("/deep_object?pagesort[page]=3")
+      .expect(200);
+
+    expect(res.body).toEqual({
+      page: 3,
+      perPage: 25,
+      field: "id",
+      order: "ASC",
+    });
+  });
+
+  test("composed schema (allOf) deepObject parameter: defaults are applied", async () => {
+    const composedSpec = JSON.parse(JSON.stringify(apiSpec));
+    const deepObjectParam = composedSpec.paths["/deep_object"].get.parameters.find(
+      (param) => param.name === "pagesort"
+    );
+    deepObjectParam.schema = {
+      allOf: [
+        { $ref: "#/components/schemas/PageSort" },
+        {
+          type: "object",
+          properties: {
+            order: {
+              type: "string",
+              enum: ["ASC", "DESC"],
+              default: "DESC",
+            },
+          },
+        },
+      ],
+    };
+
+    const composedApp = buildTestApp(composedSpec);
+    const res = await request(composedApp).get("/deep_object").expect(200);
+
+    expect(res.body).toEqual({
+      page: 1,
+      perPage: 25,
+      field: "id",
+      order: "DESC",
     });
   });
 
