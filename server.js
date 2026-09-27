@@ -37,20 +37,46 @@ function resolveRef(spec, schema) {
  */
 function createDeepObjectDefaultsMiddleware(spec) {
   const deepObjectParams = [];
-  const addDeepObjectParams = (parameters) => {
-    if (!Array.isArray(parameters)) return;
-    for (const param of parameters) {
-      if (param.in !== "query" || param.style !== "deepObject") continue;
-      const schema = resolveRef(spec, param.schema);
-      if (!schema || !schema.properties) continue;
+  const operationKeys = [
+    "get",
+    "put",
+    "post",
+    "delete",
+    "options",
+    "head",
+    "patch",
+    "trace",
+  ];
+  const collectDefaultsFromSchema = (schema) => {
+    const resolvedSchema = resolveRef(spec, schema);
+    if (!resolvedSchema) return {};
 
-      const propertyDefaults = {};
-      for (const [key, propSchema] of Object.entries(schema.properties)) {
+    const propertyDefaults = {};
+    for (const composition of ["allOf", "anyOf", "oneOf"]) {
+      const schemas = resolvedSchema[composition];
+      if (!Array.isArray(schemas)) continue;
+      for (const subSchema of schemas) {
+        Object.assign(propertyDefaults, collectDefaultsFromSchema(subSchema));
+      }
+    }
+
+    if (resolvedSchema.properties) {
+      for (const [key, propSchema] of Object.entries(resolvedSchema.properties)) {
         const resolved = resolveRef(spec, propSchema);
         if (resolved && resolved.default !== undefined) {
           propertyDefaults[key] = resolved.default;
         }
       }
+    }
+
+    return propertyDefaults;
+  };
+
+  const addDeepObjectParams = (parameters) => {
+    if (!Array.isArray(parameters)) return;
+    for (const param of parameters) {
+      if (param.in !== "query" || param.style !== "deepObject") continue;
+      const propertyDefaults = collectDefaultsFromSchema(param.schema);
 
       if (Object.keys(propertyDefaults).length > 0) {
         deepObjectParams.push({ name: param.name, defaults: propertyDefaults });
@@ -60,8 +86,8 @@ function createDeepObjectDefaultsMiddleware(spec) {
 
   for (const pathItem of Object.values(spec.paths || {})) {
     addDeepObjectParams(pathItem && pathItem.parameters);
-    for (const operation of Object.values(pathItem)) {
-      addDeepObjectParams(operation && operation.parameters);
+    for (const key of operationKeys) {
+      addDeepObjectParams(pathItem && pathItem[key] && pathItem[key].parameters);
     }
   }
 

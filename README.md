@@ -115,7 +115,7 @@ Endpoints:
 
 | Path | Description |
 |------|-------------|
-| `GET /deep_object` | Test endpoint – logs and returns `req.query` |
+| `GET /deep_object` | Test endpoint – logs `req.query` and returns an empty JSON array |
 | `GET /spec` | Raw OpenAPI spec |
 | `GET /docs` | Swagger UI |
 
