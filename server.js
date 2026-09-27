@@ -36,29 +36,32 @@ function resolveRef(spec, schema) {
  * library changes.
  */
 function createDeepObjectDefaultsMiddleware(spec) {
-  // Collect every deepObject query parameter that has per-property defaults.
   const deepObjectParams = [];
+  const addDeepObjectParams = (parameters) => {
+    if (!Array.isArray(parameters)) return;
+    for (const param of parameters) {
+      if (param.in !== "query" || param.style !== "deepObject") continue;
+      const schema = resolveRef(spec, param.schema);
+      if (!schema || !schema.properties) continue;
 
-  for (const pathItem of Object.values(spec.paths || {})) {
-    for (const operation of Object.values(pathItem)) {
-      if (!operation || !Array.isArray(operation.parameters)) continue;
-      for (const param of operation.parameters) {
-        if (param.in !== "query" || param.style !== "deepObject") continue;
-        const schema = resolveRef(spec, param.schema);
-        if (!schema || !schema.properties) continue;
-
-        const propertyDefaults = {};
-        for (const [key, propSchema] of Object.entries(schema.properties)) {
-          const resolved = resolveRef(spec, propSchema);
-          if (resolved && resolved.default !== undefined) {
-            propertyDefaults[key] = resolved.default;
-          }
-        }
-
-        if (Object.keys(propertyDefaults).length > 0) {
-          deepObjectParams.push({ name: param.name, defaults: propertyDefaults });
+      const propertyDefaults = {};
+      for (const [key, propSchema] of Object.entries(schema.properties)) {
+        const resolved = resolveRef(spec, propSchema);
+        if (resolved && resolved.default !== undefined) {
+          propertyDefaults[key] = resolved.default;
         }
       }
+
+      if (Object.keys(propertyDefaults).length > 0) {
+        deepObjectParams.push({ name: param.name, defaults: propertyDefaults });
+      }
+    }
+  };
+
+  for (const pathItem of Object.values(spec.paths || {})) {
+    addDeepObjectParams(pathItem && pathItem.parameters);
+    for (const operation of Object.values(pathItem)) {
+      addDeepObjectParams(operation && operation.parameters);
     }
   }
 
